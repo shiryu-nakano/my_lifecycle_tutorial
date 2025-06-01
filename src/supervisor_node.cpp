@@ -1,55 +1,63 @@
-#pragma once
-
-#include <vector>
-#include <string>
-#include <map>
-#include <memory>
-#include "rclcpp/rclcpp.hpp"
-#include "nav_msgs/msg/odometry.hpp"
-#include "lifecycle_msgs/srv/get_state.hpp"
-#include "lifecycle_msgs/srv/change_state.hpp"
-#include "lifecycle_supervisor/supervisor_component.hpp"
+#include "my_lifecycle_tutorial/supervisor_node.hpp"
 
 namespace lifecycle_supervisor
 {
 
-class SupervisorNode : public rclcpp::Node
+SupervisorNode::SupervisorNode()
+: rclcpp::Node("supervisor_node")
 {
-public:
-    SupervisorNode();
-    ~SupervisorNode() = default;
+    // --- パラメータ取得（例） ---
+    // declare_parameter("managed_nodes", std::vector<std::string>{});
+    // declare_parameter("switch_threshold", 1.0);
+    // get_parameter("managed_nodes", managed_nodes_);
+    // get_parameter("switch_threshold", switch_threshold_);
 
-private:
-    // ---- コールバック ----
-    void timerCallback();
-    void odomCallback(const nav_msgs::msg::Odometry::SharedPtr msg);
-    void getStateResponse(const std::string& node_name, rclcpp::Client<lifecycle_msgs::srv::GetState>::SharedFuture future);
-    void changeStateResponse(const std::string& node_name, rclcpp::Client<lifecycle_msgs::srv::ChangeState>::SharedFuture future);
+    // --- サービスクライアントの作成 ---
+    for (const auto& node_name : managed_nodes_) {
+        get_state_clients_[node_name] = this->create_client<lifecycle_msgs::srv::GetState>(node_name + "/get_state");
+        change_state_clients_[node_name] = this->create_client<lifecycle_msgs::srv::ChangeState>(node_name + "/change_state");
+    }
 
-    // ---- サービスクライアント ----
-    std::map<std::string, rclcpp::Client<lifecycle_msgs::srv::GetState>::SharedPtr> get_state_clients_;
-    std::map<std::string, rclcpp::Client<lifecycle_msgs::srv::ChangeState>::SharedPtr> change_state_clients_;
+    // --- サブスクライバの作成 ---
+    odom_sub_ = this->create_subscription<nav_msgs::msg::Odometry>(
+        "odom", 10,
+        std::bind(&SupervisorNode::odomCallback, this, std::placeholders::_1)
+    );
 
-    // ---- サブスクライバ ----
-    rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_sub_;
+    // --- タイマの作成 ---
+    timer_ = this->create_wall_timer(
+        std::chrono::seconds(1),
+        std::bind(&SupervisorNode::timerCallback, this)
+    );
+}
 
-    // ---- 内部状態 ----
-    std::vector<std::string> managed_nodes_;          // 管理ノード名（configから取得）
-    std::map<std::string, lifecycle_supervisor::Pose2D> node_poses_;   // 各ノードの現在位置
-    std::map<std::string, lifecycle_supervisor::Pose2D> node_goals_;   // 各ノードの目標位置
-    std::string active_node_;                          // 現在ACTIVEなノード名
-    double switch_threshold_;                          // 距離しきい値
+void SupervisorNode::timerCallback()
+{
+    // 1. 各ノードの状態をget_stateで問い合わせ
+    // 2. 最新の状態・位置・目標・閾値などをcomponent::Inputs構造体にまとめる
+    // 3. SupervisorComponentの静的関数（判定API）を呼ぶ
+    // 4. 判定結果に応じてchange_stateを呼ぶ
+    // 5. 必要に応じて状態やログを更新
+}
 
-    std::map<std::string, int> node_states_;           // 各ノードの状態（enum値等）
+void SupervisorNode::odomCallback(const nav_msgs::msg::Odometry::SharedPtr msg)
+{
+    // どのノード用かをトピックやframe_idなどで判別し、
+    // node_poses_[node_name] = Pose2D{...} で更新
+}
 
-    // ---- タイマ ----
-    rclcpp::TimerBase::SharedPtr timer_;
+void SupervisorNode::getStateResponse(
+    const std::string& node_name,
+    rclcpp::Client<lifecycle_msgs::srv::GetState>::SharedFuture future)
+{
+    // future.get()->current_state.id からnode_states_[node_name]を更新
+}
 
-    // ---- ロジックAPI ----
-    // SupervisorComponent component_;  // 全部static関数化ならインスタンス不要
-
-    // ---- パラメータ等 ----
-    // ...必要に応じて追加
-};
+void SupervisorNode::changeStateResponse(
+    const std::string& node_name,
+    rclcpp::Client<lifecycle_msgs::srv::ChangeState>::SharedFuture future)
+{
+    // future.get()->success などで成否判定し、必要ならログや状態を記録
+}
 
 } // namespace lifecycle_supervisor

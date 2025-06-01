@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include "lifecycle_supervisor/supervisor_component.hpp"
+#include "my_lifecycle_tutorial/supervisor_component.hpp"
 
 using namespace lifecycle_supervisor;
 
