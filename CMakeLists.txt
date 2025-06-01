@@ -48,5 +48,19 @@ install(TARGETS
 install(DIRECTORY launch/
   DESTINATION share/${PROJECT_NAME}/launch
 )
+# ---- GoogleTestのビルド設定 ----
+ament_add_gtest(test_supervisor_component test/test_supervisor_component.cpp)
+# 必要なライブラリ/インクルードを追加
+target_include_directories(test_supervisor_component PRIVATE include)
+target_link_libraries(test_supervisor_component
+  # SupervisorComponent の静的関数ならライブラリなしでもOK
+  # もしcomponent.cppをlibにまとめた場合は↓をアンコメント
+  # my_lifecycle_tutorial_component
+)
+ament_target_dependencies(test_supervisor_component
+  rclcpp
+  # 他にcomponentで使っている依存があれば追記
+)
+
 
 ament_package()
